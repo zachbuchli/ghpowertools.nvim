@@ -10,8 +10,13 @@ local M = {}
 -- setup is often used to setup defaults/config for a plugin.
 M.setup = function(opts)
   opts = opts or {}
-  -- put setup here
+
+  -- directory to clone git repos into.
   M.git_dir = opts.git_dir or vim.fn.expand '$HOME/git'
+  -- extra orgs to be included in repo listings.
+  M.orgs = opts.orgs or {}
+  -- gh cli --limit flag value.
+  M.response_limit = opts.response_limit or 1000
 end
 
 ---Open a floating window used to display gh cli
@@ -70,6 +75,11 @@ M.call = function(cmd, fields)
   local full_cmd = { 'gh', unpack(cmd) }
   table.insert(full_cmd, '--json')
   table.insert(full_cmd, str_join(fields, ','))
+
+  if M.response_limit then
+    table.insert(full_cmd, '--limit')
+    table.insert(full_cmd, tostring(M.response_limit))
+  end
   local results = vim.system(full_cmd, { text = true }):wait()
   if results.code ~= 0 then
     return nil, results.stderr
@@ -85,6 +95,12 @@ end
 -- M.git_dir
 M.clone_repo = function(opts)
   local results = M.call({ 'repo', 'list' }, { 'name', 'nameWithOwner' })
+  if M.orgs then
+    for _, v in ipairs(M.orgs) do
+      local org_repos = M.call({ 'repo', 'list', v }, { 'name', 'nameWithOwner' })
+      vim.list_extend(results or {}, org_repos or {})
+    end
+  end
   pickers
     .new(opts, {
       prompt_title = 'Clone repo',
@@ -102,23 +118,6 @@ M.clone_repo = function(opts)
       },
 
       sorter = conf.generic_sorter(opts),
-
-      -- previewer = previewers.new_buffer_previewer {
-      --   title = 'Web App Details',
-      --   define_preview = function(self, entry)
-      --     local lines = {
-      --       string.format('name: %s', entry.value.name),
-      --       string.format('resource group: %s', entry.value.resourceGroup),
-      --       string.format('location: %s', entry.value.location),
-      --       string.format('state: %s', entry.value.state),
-      --     }
-      --     for k, v in pairs(entry.value.tags) do
-      --       local line = string.format('tag: %s = %s', k, v)
-      --       table.insert(lines, line)
-      --     end
-      --     vim.api.nvim_buf_set_lines(self.state.bufnr, 0, 0, true, lines)
-      --   end,
-      -- },
 
       attach_mappings = function(prompt_bufnr)
         actions.select_default:replace(function()
