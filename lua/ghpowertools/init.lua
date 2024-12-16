@@ -94,6 +94,7 @@ end
 -- telescope extension for picking gh repo and cloning to
 -- M.git_dir
 M.clone_repo = function(opts)
+  vim.notify('Fetching avaliable gh repos...', vim.log.levels.INFO)
   local results = M.call({ 'repo', 'list' }, { 'name', 'nameWithOwner' })
   if M.orgs then
     for _, v in ipairs(M.orgs) do
@@ -133,10 +134,10 @@ M.clone_repo = function(opts)
             vim.notify(resp.stderr, vim.log.levels.ERROR)
             return
           else
-            vim.notify(string.format('Changing directory to %s', dir), vim.log.levels.INFO)
             -- change project dir and open dir
             vim.cmd.cd(dir)
             vim.cmd.edit(dir)
+            vim.notify(string.format('Changed directory to %s', dir), vim.log.levels.INFO)
           end
         end)
         return true
@@ -181,6 +182,7 @@ M.find_local_repo = function(opts)
           local path = M.git_dir .. '/' .. selection.value
           vim.cmd.cd(path)
           vim.cmd.edit(path)
+          vim.notify(string.format('Changed directory to %s', path), vim.logs.levels.INFO)
         end)
         return true
       end,
