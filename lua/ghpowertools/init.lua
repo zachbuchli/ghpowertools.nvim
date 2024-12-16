@@ -145,4 +145,47 @@ M.clone_repo = function(opts)
     :find()
 end
 
+-- telescope extension for picking gh repo and cloning to
+-- M.git_dir
+M.find_local_repo = function(opts)
+  opts = opts or {}
+  local results = vim.system({ 'ls', M.git_dir }, { text = true }):wait()
+  if results.code ~= 0 then
+    vim.notify(results.stderr, vim.logs.levels.ERROR)
+    return nil
+  end
+
+  local dirs = vim.split(results.stdout, '\n')
+  pickers
+    .new(opts, {
+      prompt_title = 'Select local Git repo',
+      finder = finders.new_table {
+        results = dirs,
+        entry_maker = function(entry)
+          if entry then
+            return {
+              value = entry,
+              display = entry,
+              ordinal = entry,
+            }
+          end
+        end,
+      },
+
+      sorter = conf.generic_sorter(opts),
+
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          actions.close(prompt_bufnr)
+          local selection = action_state.get_selected_entry()
+          local path = M.git_dir .. '/' .. selection.value
+          vim.cmd.cd(path)
+          vim.cmd.edit(path)
+        end)
+        return true
+      end,
+    })
+    :find()
+end
+
 return M
