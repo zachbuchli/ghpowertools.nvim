@@ -152,7 +152,7 @@ M.find_local_repo = function(opts)
   opts = opts or {}
   local results = vim.system({ 'ls', M.git_dir }, { text = true }):wait()
   if results.code ~= 0 then
-    vim.notify(results.stderr, vim.logs.levels.ERROR)
+    vim.notify(results.stderr, vim.log.levels.ERROR)
     return nil
   end
 
@@ -182,7 +182,7 @@ M.find_local_repo = function(opts)
           local path = M.git_dir .. '/' .. selection.value
           vim.cmd.cd(path)
           vim.cmd.edit(path)
-          vim.notify(string.format('Changed directory to %s', path), vim.logs.levels.INFO)
+          vim.notify(string.format('Changed directory to %s', path), vim.log.levels.INFO)
         end)
         return true
       end,
