@@ -3,7 +3,8 @@ local pickers = require 'telescope.pickers'
 local actions = require 'telescope.actions'
 local action_state = require 'telescope.actions.state'
 local finders = require 'telescope.finders'
---local previewers = require 'telescope.previewers'
+local previewers = require 'telescope.previewers'
+local utils = require 'telescope.previewers.utils'
 
 local M = {}
 
@@ -194,7 +195,7 @@ end
 -- telescope extension for picking gh pr for local repo and checking it out.
 M.checkout_pr = function(opts)
   vim.notify('Fetching avaliable gh prs...', vim.log.levels.INFO)
-  local results = M.call({ 'pr', 'list' }, { json_fields = { 'title', 'body', 'state', 'number' } })
+  local results = M.call({ 'pr', 'list' }, { json_fields = { 'title', 'body', 'state', 'number', 'headRefName', 'createdAt' } })
   pickers
     .new(opts, {
       prompt_title = 'Checkout Pull Request',
@@ -202,16 +203,32 @@ M.checkout_pr = function(opts)
         results = results,
         entry_maker = function(entry)
           if entry then
+            local title = string.sub(entry.title, 1, 30)
+            local display = string.format('#%s  %s  %s', entry.number, title, entry.headRefName)
             return {
               value = entry,
-              display = entry.title,
-              ordinal = entry.title,
+              display = display,
+              ordinal = display,
             }
           end
         end,
       },
 
       sorter = conf.generic_sorter(opts),
+
+      previewer = previewers.new_buffer_previewer {
+        title = 'Pull Request Details',
+        define_preview = function(self, entry)
+          local lines = {
+            string.format('## Title: %s', entry.value.title),
+            string.format('## State: %s', entry.value.state),
+            string.format('## Created at: %s', entry.value.createdAt),
+            unpack(vim.split(entry.value.body, '\r\n')),
+          }
+          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, 0, true, lines)
+          utils.highlighter(self.state.bufnr, 'markdown')
+        end,
+      },
 
       attach_mappings = function(prompt_bufnr)
         actions.select_default:replace(function()
