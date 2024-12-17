@@ -3,7 +3,7 @@ local pickers = require 'telescope.pickers'
 local actions = require 'telescope.actions'
 local action_state = require 'telescope.actions.state'
 local finders = require 'telescope.finders'
-local previewers = require 'telescope.previewers'
+--local previewers = require 'telescope.previewers'
 
 local M = {}
 
@@ -68,13 +68,15 @@ end
 
 ---Call gh cli with cmd and json fields then return results as table.
 ---@param cmd string[]
----@param fields string[]
 ---@return table|nil, string?
-M.call = function(cmd, fields)
+M.call = function(cmd, opts)
+  opts = opts or {}
   -- todo: validate fields
   local full_cmd = { 'gh', unpack(cmd) }
-  table.insert(full_cmd, '--json')
-  table.insert(full_cmd, str_join(fields, ','))
+  if opts.json_fields then
+    table.insert(full_cmd, '--json')
+    table.insert(full_cmd, str_join(opts.json_fields, ','))
+  end
 
   if M.response_limit then
     table.insert(full_cmd, '--limit')
@@ -84,21 +86,20 @@ M.call = function(cmd, fields)
   if results.code ~= 0 then
     return nil, results.stderr
   end
-  if results.stdout == '' then
-    return {}
+  if opts.json_fields then
+    return vim.json.decode(results.stdout)
   end
-  local response = vim.json.decode(results.stdout)
-  return response
+  return {}
 end
 
 -- telescope extension for picking gh repo and cloning to
 -- M.git_dir
 M.clone_repo = function(opts)
   vim.notify('Fetching avaliable gh repos...', vim.log.levels.INFO)
-  local results = M.call({ 'repo', 'list' }, { 'name', 'nameWithOwner' })
+  local results = M.call({ 'repo', 'list' }, { json_fields = { 'name', 'nameWithOwner' } })
   if M.orgs then
     for _, v in ipairs(M.orgs) do
-      local org_repos = M.call({ 'repo', 'list', v }, { 'name', 'nameWithOwner' })
+      local org_repos = M.call({ 'repo', 'list', v }, { json_fields = { 'name', 'nameWithOwner' } })
       vim.list_extend(results or {}, org_repos or {})
     end
   end
@@ -183,6 +184,46 @@ M.find_local_repo = function(opts)
           vim.cmd.cd(path)
           vim.cmd.edit(path)
           vim.notify(string.format('Changed directory to %s', path), vim.log.levels.INFO)
+        end)
+        return true
+      end,
+    })
+    :find()
+end
+
+-- telescope extension for picking gh pr for local repo and checking it out.
+M.checkout_pr = function(opts)
+  vim.notify('Fetching avaliable gh prs...', vim.log.levels.INFO)
+  local results = M.call({ 'pr', 'list' }, { json_fields = { 'title', 'body', 'state', 'number' } })
+  pickers
+    .new(opts, {
+      prompt_title = 'Checkout Pull Request',
+      finder = finders.new_table {
+        results = results,
+        entry_maker = function(entry)
+          if entry then
+            return {
+              value = entry,
+              display = entry.title,
+              ordinal = entry.title,
+            }
+          end
+        end,
+      },
+
+      sorter = conf.generic_sorter(opts),
+
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          actions.close(prompt_bufnr)
+          local selection = action_state.get_selected_entry()
+          local number = selection.value.number
+          local resp = vim.system({ 'gh', 'pr', 'checkout', number }, { text = true }):wait()
+          if resp.code ~= 0 then
+            vim.notify(string.format('Error checking out pr %s  %s', number, resp.stderr), vim.log.levels.ERROR)
+          else
+            vim.notify(string.format('Checked out pr %s', number), vim.log.levels.INFO)
+          end
         end)
         return true
       end,
